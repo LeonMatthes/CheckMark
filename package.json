@@ -1,0 +1,44 @@
+{
+  "name": "MarkdownCheck",
+  "author": "MakeAwesomeHappen",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "MarkdownCheck",
+    "uuid": "ecc65b5a-316a-4e0f-9ec8-d229e5659bfe",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "aplite",
+      "basalt",
+      "chalk",
+      "diorite",
+      "emery",
+      "flint"
+    ],
+    "watchapp": {
+      "watchface": false
+    },
+    "messageKeys": [
+      "ITEMS_COUNT",
+      "ITEMS_INDEX",
+      "ITEMS_ITEM",
+      "ITEM_CHECKED",
+      "ITEM_UNCHECKED",
+      "CONFIG_USER",
+      "CONFIG_APP_PASSWORD",
+      "CONFIG_WEB_DAV_URL"
+    ],
+    "capabilities": [
+      "configurable"
+    ],
+    "resources": {
+      "media": []
+    }
+  },
+  "dependencies": {
+    "pebble-clay": "^1.0.4"
+  }
+}
