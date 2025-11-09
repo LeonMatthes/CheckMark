@@ -27,7 +27,8 @@ static TextLayer *s_clock_layer;
 static SimpleMenuLayer *s_menu_layer;
 static SimpleMenuSection s_menu_sections[1];
 
-typedef struct {
+typedef struct
+{
   bool checked;
   char *label;
 } TodoItem;
@@ -38,26 +39,31 @@ static int s_num_items = 0;
 static GRect s_menu_bounds;
 static GBitmap *s_checked_icon;
 
-static void prv_update_item_titles() {
-  for (int i = 0; i < s_num_items; i++) {
+static void prv_update_item_titles()
+{
+  for (int i = 0; i < s_num_items; i++)
+  {
     TodoItem *item = &s_items[i];
     s_menu_view[i].title = item->label;
     s_menu_view[i].icon = item->checked ? s_checked_icon : NULL;
   }
 }
 
-static bool prv_send_item_update(int index, bool checked) {
+static bool prv_send_item_update(int index, bool checked)
+{
   DictionaryIterator *out_iter;
   AppMessageResult res = app_message_outbox_begin(&out_iter);
-  if (res != APP_MSG_OK || out_iter == NULL) {
-      APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to begin outbox: %d", (int)res);
-      return false;
+  if (res != APP_MSG_OK || out_iter == NULL)
+  {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to begin outbox: %d", (int)res);
+    return false;
   }
 
   uint32_t key = checked ? MESSAGE_KEY_ITEM_CHECKED : MESSAGE_KEY_ITEM_UNCHECKED;
   dict_write_int(out_iter, key, &index, sizeof(index), true);
   res = app_message_outbox_send();
-  if (res != APP_MSG_OK) {
+  if (res != APP_MSG_OK)
+  {
     APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to send action outbox: %d", (int)res);
 
     // Do not update the checklist state if the message failed to send, so that there is a visual indication of the failure.
@@ -66,11 +72,14 @@ static bool prv_send_item_update(int index, bool checked) {
   return true;
 }
 
-static void prv_item_selected(int index, void *ctx) {
-  if (index < 0 || index >= s_num_items) return;
+static void prv_item_selected(int index, void *ctx)
+{
+  if (index < 0 || index >= s_num_items)
+    return;
 
   bool new_checked_state = !s_items[index].checked;
-  if (!prv_send_item_update(index, new_checked_state)) {
+  if (!prv_send_item_update(index, new_checked_state))
+  {
     return; // Do not update the UI if sending the update failed
   }
 
@@ -79,11 +88,15 @@ static void prv_item_selected(int index, void *ctx) {
   layer_mark_dirty(simple_menu_layer_get_layer(s_menu_layer));
 }
 
-static void dealloc_items_and_view() {
-  if (s_items) {
-    for (int i = 0; i < s_num_items; i++) {
+static void dealloc_items_and_view()
+{
+  if (s_items)
+  {
+    for (int i = 0; i < s_num_items; i++)
+    {
       TodoItem *item = &s_items[i];
-      if (item->label) {
+      if (item->label)
+      {
         free(item->label);
         item->label = NULL;
       }
@@ -92,20 +105,25 @@ static void dealloc_items_and_view() {
     free(s_items);
     s_items = NULL;
   }
-  if (s_menu_view) {
+  if (s_menu_view)
+  {
     free(s_menu_view);
     s_menu_view = NULL;
   }
 }
 
-static void update_count(int count) {
-  if (count < 0) count = 0;
+static void update_count(int count)
+{
+  if (count < 0)
+    count = 0;
 
   dealloc_items_and_view();
-  if (count > 0) {
+  if (count > 0)
+  {
     s_items = calloc(count, sizeof(TodoItem));
     s_menu_view = calloc(count, sizeof(SimpleMenuItem));
-    if (!s_items || !s_menu_view) {
+    if (!s_items || !s_menu_view)
+    {
       APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to allocate memory for items");
       // this will free the other if only one allocation failed
       update_count(0);
@@ -117,11 +135,14 @@ static void update_count(int count) {
   APP_LOG(APP_LOG_LEVEL_INFO, "Received count=%d", count);
 }
 
-static void add_item(int index, const char *item_text) {
-  if (index >= 0 && index < s_num_items && item_text) {
+static void add_item(int index, const char *item_text)
+{
+  if (index >= 0 && index < s_num_items && item_text)
+  {
     TodoItem *item = &s_items[index];
 
-    if (item->label) {
+    if (item->label)
+    {
       free(item->label);
       item->label = NULL;
     }
@@ -133,9 +154,11 @@ static void add_item(int index, const char *item_text) {
   }
 }
 
-static void complete_list_update() {
+static void complete_list_update()
+{
   // Prepare view entries and titles
-  for (int i = 0; i < s_num_items; i++) {
+  for (int i = 0; i < s_num_items; i++)
+  {
     s_menu_view[i] = (SimpleMenuItem){.title = s_items[i].label,
                                       .subtitle = (char *)0,
                                       .callback = prv_item_selected};
@@ -146,7 +169,8 @@ static void complete_list_update() {
   prv_update_item_titles();
 
   // Recreate the menu layer with the new number of items
-  if (s_menu_layer) {
+  if (s_menu_layer)
+  {
     layer_remove_from_parent(simple_menu_layer_get_layer(s_menu_layer));
     simple_menu_layer_destroy(s_menu_layer);
     s_menu_layer = NULL;
@@ -155,49 +179,56 @@ static void complete_list_update() {
                                            .num_items = s_num_items,
                                            .items = s_menu_view};
   s_menu_layer = simple_menu_layer_create(s_menu_bounds, s_window,
-                                         s_menu_sections, 1, NULL);
+                                          s_menu_sections, 1, NULL);
   layer_add_child(window_get_root_layer(s_window),
                   simple_menu_layer_get_layer(s_menu_layer));
 }
 
 // AppMessage inbox handler: receive one item at a time (with count/index/item)
-static void inbox_received_handler(DictionaryIterator *iter, void *context) {
+static void inbox_received_handler(DictionaryIterator *iter, void *context)
+{
   Tuple *t_count = dict_find(iter, MESSAGE_KEY_ITEMS_COUNT);
 
-  if (t_count) {
+  if (t_count)
+  {
     update_count(t_count->value->int32);
   }
 
   Tuple *t_index = dict_find(iter, MESSAGE_KEY_ITEMS_INDEX);
   Tuple *t_item = dict_find(iter, MESSAGE_KEY_ITEMS_ITEM);
 
-  if (t_index && t_item) {
+  if (t_index && t_item)
+  {
     int index = t_index->value->int32;
     const char *item_text = t_item->value->cstring;
 
     add_item(index, item_text);
     APP_LOG(APP_LOG_LEVEL_INFO, "Received item %d: %s", index, item_text);
 
-    if (index == s_num_items - 1) {
+    if (index == s_num_items - 1)
+    {
       // Last item received; update the whole list
       complete_list_update();
     }
   }
 }
 
-static void inbox_dropped_handler(AppMessageResult reason, void *context) {
+static void inbox_dropped_handler(AppMessageResult reason, void *context)
+{
   APP_LOG(APP_LOG_LEVEL_ERROR, "Message dropped: %d", (int)reason);
 }
 
 static void outbox_failed_handler(DictionaryIterator *iter, AppMessageResult reason,
-                                  void *context) {
+                                  void *context)
+{
   APP_LOG(APP_LOG_LEVEL_ERROR, "Outbox send failed: %d", (int)reason);
 }
 
 // Requires s_clock_layer to be valid
 // Clock functions moved to clock.c (clock_init / clock_deinit)
 
-static void prv_window_load(Window *window) {
+static void prv_window_load(Window *window)
+{
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
 
@@ -208,15 +239,18 @@ static void prv_window_load(Window *window) {
   s_menu_bounds = GRect(0, 24, bounds.size.w, bounds.size.h - 24);
 }
 
-static void prv_window_unload(Window *window) {
-  if (s_menu_layer) {
+static void prv_window_unload(Window *window)
+{
+  if (s_menu_layer)
+  {
     simple_menu_layer_destroy(s_menu_layer);
     s_menu_layer = NULL;
   }
   clock_deinit();
 }
 
-static void prv_init(void) {
+static void prv_init(void)
+{
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers){
                                            .load = prv_window_load,
@@ -236,13 +270,15 @@ static void prv_init(void) {
   s_checked_icon = gbitmap_create_with_resource(RESOURCE_ID_CHECK_MARK);
 }
 
-static void prv_deinit(void) {
+static void prv_deinit(void)
+{
   gbitmap_destroy(s_checked_icon);
   window_destroy(s_window);
   dealloc_items_and_view();
 }
 
-int main(void) {
+int main(void)
+{
   prv_init();
 
   APP_LOG(APP_LOG_LEVEL_DEBUG, "Done initializing, pushed window: %p",
