@@ -1,8 +1,8 @@
 {
   "name": "MarkdownCheck",
-  "author": "MakeAwesomeHappen",
+  "author": "Leon Matthes",
   "version": "1.0.0",
-  "keywords": ["pebble-app"],
+  "keywords": ["Checklist", "Markdown", "Todo", "WebDAV"],
   "private": true,
   "dependencies": {},
   "pebble": {
@@ -15,8 +15,7 @@
       "basalt",
       "chalk",
       "diorite",
-      "emery",
-      "flint"
+      "emery"
     ],
     "watchapp": {
       "watchface": false
