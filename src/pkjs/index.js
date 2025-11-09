@@ -89,7 +89,7 @@ Pebble.addEventListener('ready',
 );
 
 function splitDocumentIntoLines(doc) {
-  return doc.split(/[\r\n]+/);
+  return doc.split(/\r?[\n]/);
 }
 
 const ITEM_REGEX = /^\s*-\s\[\s\]\s*(.*)$/;
@@ -210,12 +210,26 @@ function uploadUpdatedDocument() {
 Pebble.addEventListener('appmessage', function(e) {
   try {
     var payload = e.payload || {};
-    if (typeof payload[keys.ITEM_CHECKED] !== 'undefined') {
-      console.log('Received item CHECKED from watch: index=', payload[keys.ITEM_CHECKED]);
-      setItemCheckedState(payload[keys.ITEM_CHECKED], true);
-    } else if (typeof payload[keys.ITEM_UNCHECKED] !== 'undefined') {
-      console.log('Received item UNCHECKED from watch: index=', payload[keys.ITEM_UNCHECKED]);
-      setItemCheckedState(payload[keys.ITEM_UNCHECKED], false);
+    let retrieve = (key) => {
+      let maybe = payload[key];
+      if (typeof maybe !== 'undefined') {
+        return maybe;
+      }
+      maybe = payload[keys[key]];
+      if (typeof maybe !== 'undefined') {
+        return maybe;
+      }
+      return null;
+    };
+
+    let checked = retrieve("ITEM_CHECKED");
+    let unchecked = retrieve("ITEM_UNCHECKED");
+    if (checked != null) {
+      console.log('Received item CHECKED from watch: index=', checked);
+      setItemCheckedState(checked, true);
+    } else if (unchecked != null) {
+      console.log('Received item UNCHECKED from watch: index=', unchecked);
+      setItemCheckedState(unchecked, false);
     } else {
       console.log('Received unknown appmessage payload:', payload);
     }
