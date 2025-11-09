@@ -38,8 +38,13 @@
         {
           "type": "bitmap",
           "name": "CHECK_MARK",
-          "file": "action_bar_icon_check.png",
-          "memoryFormat": "1Bit"
+          "file": "action_bar_icon_check.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "APP_LOGO",
+          "file": "logo.png",
+          "menuIcon": true
         }
       ]
     }
