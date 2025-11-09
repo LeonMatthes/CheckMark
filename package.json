@@ -1,12 +1,12 @@
 {
-  "name": "MarkdownCheck",
+  "name": "CheckMark",
   "author": "Leon Matthes",
   "version": "1.0.0",
   "keywords": ["Checklist", "Markdown", "Todo", "WebDAV"],
   "private": true,
   "dependencies": {},
   "pebble": {
-    "displayName": "MarkdownCheck",
+    "displayName": "CheckMark",
     "uuid": "ecc65b5a-316a-4e0f-9ec8-d229e5659bfe",
     "sdkVersion": "3",
     "enableMultiJS": true,
