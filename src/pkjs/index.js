@@ -22,11 +22,11 @@ function loadSettings() {
   console.log(`Loaded setting: ${username}@${webdavUrl}`);
 }
 
-Pebble.addEventListener('showConfiguration', function(e) {
+Pebble.addEventListener('showConfiguration', function (e) {
   Pebble.openURL(clay.generateUrl());
 });
 
-Pebble.addEventListener('webviewclosed', function(e) {
+Pebble.addEventListener('webviewclosed', function (e) {
   if (e && !e.response) {
     return;
   }
@@ -52,13 +52,14 @@ function loadDocument() {
 
   if (!webdavUrl || !username || !appPassword) {
     console.log("No configuration - aborting!");
+    setStatus('No config!');
     return;
   }
 
   // Create a new web request
   let request = new XMLHttpRequest();
 
-  request.onload = function() {
+  request.onload = function () {
     console.log("Request finished");
     if (this.status >= 200 && this.status < 300) {
       // SUCCESS! The file content is in request.responseText
@@ -70,20 +71,23 @@ function loadDocument() {
     } else {
       // FAILED
       console.log('Error reading file: ' + this.status + ' ' + this.responseText);
+      setStatus('Load error: ' + this.status);
     }
   };
 
-  request.onerror = function() {
+  request.onerror = function () {
     console.log('Request failed!');
+    setStatus('Network error!');
   };
 
   request.open('GET', webdavUrl, true, username, appPassword);
   request.send();
   console.log('Sent request');
+  setStatus('Loading...');
 }
 
 Pebble.addEventListener('ready',
-  function(e) {
+  function (e) {
     loadDocument();
   }
 );
@@ -132,13 +136,18 @@ function sendItemsToWatch() {
   countPayload[keys.ITEMS_COUNT] = checklistItems.length;
 
   Pebble.sendAppMessage(countPayload,
-    function() {
-      if (checklistItems.length > 0) sendNextItem(checklistItems, 0);
+    function () {
+      if (checklistItems.length > 0) {
+        sendNextItem(checklistItems, 0);
+      } else {
+        // No items to send, we're done.
+        setStatus('All done!');
+      }
     },
-    function(err) {
+    function (err) {
       console.log('Send count failed: ' + JSON.stringify(err));
       // retry the whole sequence after a short delay
-      setTimeout(function() { sendItemsToWatch(); }, 500);
+      setTimeout(function () { sendItemsToWatch(); }, 500);
     }
   );
 }
@@ -146,7 +155,11 @@ function sendItemsToWatch() {
 function sendNextItem(items, index) {
   console.log(`Sending item at index ${index}`);
 
-  if (index >= items.length) return;
+  if (index >= items.length) {
+    // We're done here...
+    setStatus('');
+    return;
+  }
 
   let payload = {};
   payload[keys.ITEMS_INDEX] = index;
@@ -161,7 +174,7 @@ function sendNextItem(items, index) {
     (err) => {
       console.log('Send failed for index ' + index + ': ' + JSON.stringify(err));
       // retry this item after a short delay
-      setTimeout(function() { sendNextItem(items, index); }, 500);
+      setTimeout(function () { sendNextItem(items, index); }, 500);
     }
   );
 }
@@ -185,29 +198,33 @@ function setItemCheckedState(index, checked) {
 function uploadUpdatedDocument() {
   let updatedDocument = documentLines.join('\n');
 
-      // Create a new web request
-    let request = new XMLHttpRequest();
+  // Create a new web request
+  let request = new XMLHttpRequest();
 
-    request.onload = function() {
-      if (this.status >= 200 && this.status < 300) {
-        console.log("Successfully updated the file on the server.");
-      } else {
-        // FAILED
-        console.log('Error updating file: ' + this.status + ' ' + this.responseText);
-      }
-    };
+  request.onload = function () {
+    if (this.status >= 200 && this.status < 300) {
+      console.log("Successfully updated the file on the server.");
+      setStatus('');
+    } else {
+      // FAILED
+      console.log('Error updating file: ' + this.status + ' ' + this.responseText);
+      setStatus('Upload err: ' + this.status);
+    }
+  };
 
-    request.onerror = function() {
-      console.log('Request failed!');
-    };
-    request.open('PUT', webdavUrl, true, username, appPassword);
-    request.setRequestHeader('Content-Type', 'text/markdown');
-    request.send(updatedDocument);
-    console.log('Sent updated document to server.');
+  request.onerror = function () {
+    console.log('Request failed!');
+    setStatus('Upload error!');
+  };
+  request.open('PUT', webdavUrl, true, username, appPassword);
+  request.setRequestHeader('Content-Type', 'text/markdown');
+  request.send(updatedDocument);
+  console.log('Sent updated document to server.');
+  setStatus('...');
 }
 
 // Listen for messages from the watch (item actions) and log them.
-Pebble.addEventListener('appmessage', function(e) {
+Pebble.addEventListener('appmessage', function (e) {
   try {
     var payload = e.payload || {};
     let retrieve = (key) => {
@@ -237,3 +254,18 @@ Pebble.addEventListener('appmessage', function(e) {
     console.log('Error handling appmessage: ' + ex);
   }
 });
+
+
+// Send a short status message to the watch. Kept short to fit the UI.
+function setStatus(text) {
+  try {
+    var payload = {};
+    payload[keys.SET_STATUS] = text || '';
+    Pebble.sendAppMessage(payload,
+      function () { },
+      function (err) { console.log('Status send failed: ' + JSON.stringify(err)); }
+    );
+  } catch (ex) {
+    console.log('Error sending status: ' + ex);
+  }
+}

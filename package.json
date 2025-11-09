@@ -2,7 +2,12 @@
   "name": "CheckMark",
   "author": "Leon Matthes",
   "version": "1.0.0",
-  "keywords": ["Checklist", "Markdown", "Todo", "WebDAV"],
+  "keywords": [
+    "Checklist",
+    "Markdown",
+    "Todo",
+    "WebDAV"
+  ],
   "private": true,
   "dependencies": {},
   "pebble": {
@@ -28,7 +33,8 @@
       "ITEM_UNCHECKED",
       "CONFIG_USER",
       "CONFIG_APP_PASSWORD",
-      "CONFIG_WEB_DAV_URL"
+      "CONFIG_WEB_DAV_URL",
+      "SET_STATUS"
     ],
     "capabilities": [
       "configurable"
