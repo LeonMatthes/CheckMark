@@ -34,7 +34,14 @@
       "configurable"
     ],
     "resources": {
-      "media": []
+      "media": [
+        {
+          "type": "bitmap",
+          "name": "CHECK_MARK",
+          "file": "action_bar_icon_check.png",
+          "memoryFormat": "1Bit"
+        }
+      ]
     }
   },
   "dependencies": {

@@ -28,7 +28,6 @@ static SimpleMenuLayer *s_menu_layer;
 static SimpleMenuSection s_menu_sections[1];
 
 typedef struct {
-  char *title;
   bool checked;
   char *label;
 } TodoItem;
@@ -37,23 +36,13 @@ static TodoItem *s_items = NULL;
 static SimpleMenuItem *s_menu_view = NULL;
 static int s_num_items = 0;
 static GRect s_menu_bounds;
+static GBitmap *s_checked_icon;
 
 static void prv_update_item_titles() {
   for (int i = 0; i < s_num_items; i++) {
     TodoItem *item = &s_items[i];
-    int title_length = strlen(item->label) + 4; // 4 for prefix
-    if (!item->title) {
-      item->title = calloc(title_length + 1, sizeof(char));
-      if (!item->title) {
-        APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to allocate memory for item title");
-        continue;
-      }
-    }
-
-    const char *prefix = item->checked ? "[x] " : "[ ] ";
-    strncpy(item->title, prefix, title_length);
-    strncat(item->title, item->label, title_length - strlen(item->title));
-    s_menu_view[i].title = item->title;
+    s_menu_view[i].title = item->label;
+    s_menu_view[i].icon = item->checked ? s_checked_icon : NULL;
   }
 }
 
@@ -98,10 +87,6 @@ static void dealloc_items_and_view() {
         free(item->label);
         item->label = NULL;
       }
-      if (item->title) {
-        free(item->title);
-        item->title = NULL;
-      }
     }
 
     free(s_items);
@@ -135,14 +120,10 @@ static void update_count(int count) {
 static void add_item(int index, const char *item_text) {
   if (index >= 0 && index < s_num_items && item_text) {
     TodoItem *item = &s_items[index];
-    
+
     if (item->label) {
       free(item->label);
       item->label = NULL;
-    }
-    if (item->title) {
-      free(item->title);
-      item->title = NULL;
     }
     int length = strlen(item_text);
     // calloc will automatically add the null terminator
@@ -155,7 +136,7 @@ static void add_item(int index, const char *item_text) {
 static void complete_list_update() {
   // Prepare view entries and titles
   for (int i = 0; i < s_num_items; i++) {
-    s_menu_view[i] = (SimpleMenuItem){.title = s_items[i].title,
+    s_menu_view[i] = (SimpleMenuItem){.title = s_items[i].label,
                                       .subtitle = (char *)0,
                                       .callback = prv_item_selected};
   }
@@ -251,9 +232,12 @@ static void prv_init(void) {
   const uint32_t inbox_size = 1024;
   const uint32_t outbox_size = 64;
   app_message_open(inbox_size, outbox_size);
+
+  s_checked_icon = gbitmap_create_with_resource(RESOURCE_ID_CHECK_MARK);
 }
 
 static void prv_deinit(void) {
+  gbitmap_destroy(s_checked_icon);
   window_destroy(s_window);
   dealloc_items_and_view();
 }
