@@ -25,6 +25,7 @@ static Window *s_window;
 // from the companion via AppMessage.
 static SimpleMenuLayer *s_menu_layer;
 static SimpleMenuSection s_menu_sections[1];
+static char s_menu_title[64] = "Checklist";
 
 typedef struct {
   bool checked;
@@ -36,6 +37,8 @@ static SimpleMenuItem *s_menu_view = NULL;
 static int s_num_items = 0;
 static GRect s_menu_bounds;
 static GBitmap *s_checked_icon;
+
+static void complete_list_update();
 
 static void prv_update_item_titles() {
   for (int i = 0; i < s_num_items; i++) {
@@ -59,6 +62,7 @@ static bool prv_send_item_update(int index, bool checked) {
   res = app_message_outbox_send();
   if (res != APP_MSG_OK) {
     APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to send action outbox: %d", (int)res);
+    status_bar_set_status("Failed to send!");
 
     // Do not update the checklist state if the message failed to send, so that
     // there is a visual indication of the failure.
@@ -104,6 +108,12 @@ static void update_count(int count) {
   if (count < 0)
     count = 0;
 
+  // First, remove the existing menu layer if any
+  if (s_menu_layer) {
+    layer_remove_from_parent(simple_menu_layer_get_layer(s_menu_layer));
+    simple_menu_layer_destroy(s_menu_layer);
+    s_menu_layer = NULL;
+  }
   dealloc_items_and_view();
   if (count > 0) {
     s_items = calloc(count, sizeof(TodoItem));
@@ -155,7 +165,7 @@ static void complete_list_update() {
     s_menu_layer = NULL;
   }
   s_menu_sections[0] = (SimpleMenuSection){
-      .title = "Checklist", .num_items = s_num_items, .items = s_menu_view};
+      .title = s_menu_title, .num_items = s_num_items, .items = s_menu_view};
   s_menu_layer = simple_menu_layer_create(s_menu_bounds, s_window,
                                           s_menu_sections, 1, NULL);
   layer_add_child(window_get_root_layer(s_window),
@@ -164,8 +174,14 @@ static void complete_list_update() {
 
 // AppMessage inbox handler: receive one item at a time (with count/index/item)
 static void inbox_received_handler(DictionaryIterator *iter, void *context) {
-  Tuple *t_count = dict_find(iter, MESSAGE_KEY_ITEMS_COUNT);
+  Tuple *t_title = dict_find(iter, MESSAGE_KEY_LIST_TITLE);
+  if (t_title) {
+    const char *title_text = t_title->value->cstring;
+    strncpy(s_menu_title, title_text, sizeof(s_menu_title) - 1);
+    s_menu_title[sizeof(s_menu_title) - 1] = '\0';
+  }
 
+  Tuple *t_count = dict_find(iter, MESSAGE_KEY_ITEMS_COUNT);
   if (t_count) {
     update_count(t_count->value->int32);
   }
@@ -191,15 +207,22 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     const char *status_text = t_status->value->cstring;
     status_bar_set_status(status_text);
   }
+
+  Tuple *t_progressing = dict_find(iter, MESSAGE_KEY_SET_PROGRESSING);
+  if (t_progressing) {
+    status_bar_set_progressing(t_progressing->value->int32 != 0);
+  }
 }
 
 static void inbox_dropped_handler(AppMessageResult reason, void *context) {
   APP_LOG(APP_LOG_LEVEL_ERROR, "Message dropped: %d", (int)reason);
+
 }
 
 static void outbox_failed_handler(DictionaryIterator *iter,
                                   AppMessageResult reason, void *context) {
   APP_LOG(APP_LOG_LEVEL_ERROR, "Outbox send failed: %d", (int)reason);
+  status_bar_set_status("Cannot reach phone!");
 }
 
 // Requires s_clock_layer to be valid
@@ -213,7 +236,8 @@ static void prv_window_load(Window *window) {
   // Initialize the clock UI (creates layer, sets text and subscribes ticks)
   status_bar_init(window);
 
-  s_menu_bounds = GRect(0, 24, bounds.size.w, bounds.size.h - 24);
+  GRect bar_bounds = layer_get_bounds(status_bar_get_layer());
+  s_menu_bounds = GRect(0, bar_bounds.size.h, bounds.size.w, bounds.size.h - bar_bounds.size.h);
 }
 
 static void prv_window_unload(Window *window) {

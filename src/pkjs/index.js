@@ -2,8 +2,15 @@ var keys = require('message_keys'); // generated at build time from package.json
 
 // Persist the most recently loaded document here so it's accessible
 // throughout this module (file). It's set after a successful GET.
-let documentLines = '';
+let documentLines = [];
 let checklistItems = [];
+let listTitle = 'Checklist';
+
+function resetState() {
+  documentLines = [];
+  checklistItems = [];
+  listTitle = 'Checklist';
+}
 
 // Default Nextcloud details (will be overridden by user configuration if available)
 let webdavUrl = ''; // default URL
@@ -66,24 +73,37 @@ function loadDocument() {
       // Persist the raw document so other functions in this file can access it.
       documentLines = splitDocumentIntoLines(this.responseText || '');
       checklistItems = ExtractItemsFromLines(documentLines);
+      listTitle = webdavUrl.split('/').pop() || 'Checklist';
 
       sendItemsToWatch();
+
+      if (checklistItems.length === 0) {
+        console.log('No unchecked checklist items found.');
+        setStatus('All done!');
+      } else {
+        console.log('Unchecked items:');
+        checklistItems.forEach((it, idx) => console.log(`${idx + 1}: ${it}`));
+      }
     } else {
       // FAILED
       console.log('Error reading file: ' + this.status + ' ' + this.responseText);
       setStatus('Load error: ' + this.status);
+      resetState();
+      sendItemsToWatch();
     }
   };
 
   request.onerror = function () {
     console.log('Request failed!');
     setStatus('Network error!');
+    resetState();
+    sendItemsToWatch();
   };
 
   request.open('GET', webdavUrl, true, username, appPassword);
   request.send();
   console.log('Sent request');
-  setStatus('Loading...');
+  setStatus('', true);
 }
 
 Pebble.addEventListener('ready',
@@ -124,24 +144,15 @@ function ExtractItemsFromLines(lines) {
 // This is robust against AppMessage size limits and lets the C side
 // assemble items deterministically.
 function sendItemsToWatch() {
-  if (checklistItems.length === 0) {
-    console.log('No unchecked checklist items found.');
-  } else {
-    console.log('Unchecked items:');
-    checklistItems.forEach((it, idx) => console.log(`${idx + 1}: ${it}`));
-  }
-
   // First send the total count once. On success, stream items one-by-one.
   let countPayload = {};
   countPayload[keys.ITEMS_COUNT] = checklistItems.length;
+  countPayload[keys.LIST_TITLE] = listTitle;
 
   Pebble.sendAppMessage(countPayload,
     function () {
       if (checklistItems.length > 0) {
         sendNextItem(checklistItems, 0);
-      } else {
-        // No items to send, we're done.
-        setStatus('All done!');
       }
     },
     function (err) {
@@ -220,7 +231,7 @@ function uploadUpdatedDocument() {
   request.setRequestHeader('Content-Type', 'text/markdown');
   request.send(updatedDocument);
   console.log('Sent updated document to server.');
-  setStatus('...');
+  setStatus('', true);
 }
 
 // Listen for messages from the watch (item actions) and log them.
@@ -257,10 +268,12 @@ Pebble.addEventListener('appmessage', function (e) {
 
 
 // Send a short status message to the watch. Kept short to fit the UI.
-function setStatus(text) {
+function setStatus(text, progressing = false) {
   try {
     var payload = {};
     payload[keys.SET_STATUS] = text || '';
+    payload[keys.SET_PROGRESSING] = progressing ? 1 : 0;
+
     Pebble.sendAppMessage(payload,
       function () { },
       function (err) { console.log('Status send failed: ' + JSON.stringify(err)); }

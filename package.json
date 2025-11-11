@@ -26,6 +26,7 @@
       "watchface": false
     },
     "messageKeys": [
+      "LIST_TITLE",
       "ITEMS_COUNT",
       "ITEMS_INDEX",
       "ITEMS_ITEM",
@@ -34,7 +35,8 @@
       "CONFIG_USER",
       "CONFIG_APP_PASSWORD",
       "CONFIG_WEB_DAV_URL",
-      "SET_STATUS"
+      "SET_STATUS",
+      "SET_PROGRESSING"
     ],
     "capabilities": [
       "configurable"

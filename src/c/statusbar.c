@@ -8,15 +8,65 @@
 
 static StatusBarLayer *s_status_bar_layer = NULL;
 // Internal buffer for status text so callers don't need to keep strings alive.
-static char s_status_buffer[32];
+static char s_status_buffer[32] = "";
 static TextLayer *s_status_layer = NULL;
 static PropertyAnimation *s_status_anim = NULL;
 static bool s_status_visible = false;
 // Animation duration (ms)
 #define STATUS_ANIM_DURATION 200
 
+static Layer *s_progress_layer = NULL;
+static PropertyAnimation *s_progress_anim = NULL;
+bool s_progressing = false;
+
 static void prv_anim_stopped(Animation *animation, bool finished, void *context);
 static void prv_animate_layer_to(Layer *layer, GRect to_frame, uint32_t delay_ms);
+static void start_progress_anim();
+
+static void draw_progress_layer(Layer *layer, GContext *ctx) {
+  // Example progress drawing (replace with actual progress logic)
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, layer_get_bounds(layer), 0, GCornerNone);
+}
+
+static void finish_progress_anim(Animation *animation, bool finished, void *context) {
+  if (finished && s_progressing) {
+    start_progress_anim();
+  }
+  else {
+    if (s_progress_anim) {
+      property_animation_destroy(s_progress_anim);
+      s_progress_anim = NULL;
+    }
+  }
+}
+
+static void start_progress_anim() {
+  if (!s_progress_layer)
+    return;
+
+  // Cancel previous animation if running
+  if (s_progress_anim) {
+    property_animation_destroy(s_progress_anim);
+    s_progress_anim = NULL;
+  }
+
+  GRect bar_bounds = layer_get_bounds(status_bar_layer_get_layer(s_status_bar_layer));
+  GRect from = GRect(-bar_bounds.size.w / 3, bar_bounds.size.h - 2, bar_bounds.size.w / 3, 2);
+  GRect to = GRect(bar_bounds.size.w, bar_bounds.size.h - 2, bar_bounds.size.w / 4, 2);
+
+  s_progress_anim = property_animation_create_layer_frame(s_progress_layer, &from, &to);
+  animation_set_duration((Animation *)s_progress_anim, 1000);
+  animation_set_curve((Animation *)s_progress_anim, AnimationCurveEaseInOut);
+  
+  // Repeat indefinitely if still progressing
+  AnimationHandlers handlers = {
+    .stopped = finish_progress_anim
+  };
+  animation_set_handlers((Animation *)s_progress_anim, handlers, NULL);
+  
+  animation_schedule((Animation *)s_progress_anim);
+}
 
 void status_bar_init(Window *window) {
   if (!window)
@@ -41,11 +91,13 @@ void status_bar_init(Window *window) {
   text_layer_set_background_color(s_status_layer, GColorBlack);
   text_layer_set_text_color(s_status_layer, GColorWhite);
   text_layer_set_text_alignment(s_status_layer, GTextAlignmentCenter);
-
-  status_bar_set_status("Loading...");
+  text_layer_set_text(s_status_layer, s_status_buffer);
 
   layer_add_child(window_layer, text_layer_get_layer(s_status_layer));
 
+  s_progress_layer = layer_create(GRect(-bounds.size.w / 3, bounds.size.h - 2, bounds.size.w / 3, 2));
+  layer_set_update_proc(s_progress_layer, draw_progress_layer);
+  layer_add_child(window_layer, s_progress_layer);
 }
 
 void status_bar_deinit(void) {
@@ -55,13 +107,20 @@ void status_bar_deinit(void) {
     s_status_anim = NULL;
   }
   if (s_status_layer) {
-    layer_remove_from_parent(text_layer_get_layer(s_status_layer));
     text_layer_destroy(s_status_layer);
     s_status_layer = NULL;
   }
   if (s_status_bar_layer) {
     status_bar_layer_destroy(s_status_bar_layer);
     s_status_bar_layer = NULL;
+  }
+  if (s_progress_anim) {
+    property_animation_destroy(s_progress_anim);
+    s_progress_anim = NULL;
+  }
+  if (s_progress_layer) {
+    layer_destroy(s_progress_layer);
+    s_progress_layer = NULL;
   }
 }
 
@@ -121,3 +180,14 @@ static void prv_anim_stopped(Animation *animation, bool finished, void *context)
   }
 }
 
+void status_bar_set_progressing(bool progressing)
+{
+  if (progressing && !s_progress_anim) {
+    start_progress_anim();
+  }
+  s_progressing = progressing;
+}
+
+Layer *status_bar_get_layer() {
+  return status_bar_layer_get_layer(s_status_bar_layer);
+}
