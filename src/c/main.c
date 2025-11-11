@@ -168,6 +168,10 @@ static void complete_list_update() {
       .title = s_menu_title, .num_items = s_num_items, .items = s_menu_view};
   s_menu_layer = simple_menu_layer_create(s_menu_bounds, s_window,
                                           s_menu_sections, 1, NULL);
+#ifdef PBL_COLOR
+  MenuLayer *s_menu = simple_menu_layer_get_menu_layer(s_menu_layer);
+  menu_layer_set_highlight_colors(s_menu, GColorPictonBlue, GColorBlack);
+#endif
   layer_add_child(window_get_root_layer(s_window),
                   simple_menu_layer_get_layer(s_menu_layer));
 }

@@ -25,7 +25,7 @@ static void start_progress_anim();
 
 static void draw_progress_layer(Layer *layer, GContext *ctx) {
   // Example progress drawing (replace with actual progress logic)
-  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorOrange, GColorBlack));
   graphics_fill_rect(ctx, layer_get_bounds(layer), 0, GCornerNone);
 }
 
@@ -88,8 +88,8 @@ void status_bar_init(Window *window) {
       GRect(0, -bounds.size.h, bounds.size.w, bounds.size.h - 1)); // Leave space for the separator line
   text_layer_set_font(s_status_layer,
                       fonts_get_system_font(FONT_KEY_GOTHIC_14));
-  text_layer_set_background_color(s_status_layer, GColorBlack);
-  text_layer_set_text_color(s_status_layer, GColorWhite);
+  text_layer_set_background_color(s_status_layer, PBL_IF_COLOR_ELSE(GColorRajah, GColorBlack));
+  text_layer_set_text_color(s_status_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorWhite));
   text_layer_set_text_alignment(s_status_layer, GTextAlignmentCenter);
   text_layer_set_text(s_status_layer, s_status_buffer);
 
