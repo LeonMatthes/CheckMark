@@ -48,6 +48,15 @@ static void prv_update_item_titles() {
   }
 }
 
+// Clean up PropertyAnimation when it finishes
+static void prv_property_animation_stopped(Animation *anim, bool finished,
+                                           void *context) {
+  if (finished) {
+    // The incoming Animation pointer is actually a PropertyAnimation*
+    property_animation_destroy((PropertyAnimation *)anim);
+  }
+}
+
 static bool prv_send_item_update(int index, bool checked) {
   DictionaryIterator *out_iter;
   AppMessageResult res = app_message_outbox_begin(&out_iter);
@@ -172,8 +181,28 @@ static void complete_list_update() {
   MenuLayer *s_menu = simple_menu_layer_get_menu_layer(s_menu_layer);
   menu_layer_set_highlight_colors(s_menu, GColorPictonBlue, GColorBlack);
 #endif
-  layer_add_child(window_get_root_layer(s_window),
-                  simple_menu_layer_get_layer(s_menu_layer));
+  // Slide the menu layer in from the side using a PropertyAnimation.
+  Layer *menu_layer = simple_menu_layer_get_layer(s_menu_layer);
+  // Start frame: positioned just below the target bounds
+  GRect from_frame =
+      GRect(s_menu_bounds.origin.x - s_menu_bounds.size.w,
+            s_menu_bounds.origin.y, s_menu_bounds.size.w, s_menu_bounds.size.h);
+  // Target frame is the bounds we want
+  GRect to_frame = s_menu_bounds;
+  // Apply the start frame before adding so it appears off-screen
+  layer_set_frame(menu_layer, from_frame);
+  layer_add_child(window_get_root_layer(s_window), menu_layer);
+
+  // Create and schedule the property animation
+  PropertyAnimation *prop_anim =
+      property_animation_create_layer_frame(menu_layer, &from_frame, &to_frame);
+  Animation *anim = (Animation *)prop_anim;
+  animation_set_duration(anim, 300);
+  animation_set_curve(anim, AnimationCurveEaseOut);
+  animation_set_handlers(
+      anim, (AnimationHandlers){.stopped = prv_property_animation_stopped},
+      NULL);
+  animation_schedule(anim);
 }
 
 // AppMessage inbox handler: receive one item at a time (with count/index/item)
