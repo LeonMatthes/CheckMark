@@ -92,6 +92,10 @@ static int16_t prv_cell_height(MenuLayer *layer, MenuIndex *idx, void *ctx) {
 }
 
 static int16_t prv_header_height(MenuLayer *layer, uint16_t section_index, void *ctx) {
+  if (s_num_sections > 0 && section_index < (uint16_t)s_num_sections
+      && s_sections[section_index].title[0] == '\0') {
+    return 0;
+  }
   return MENU_CELL_BASIC_HEADER_HEIGHT;
 }
 

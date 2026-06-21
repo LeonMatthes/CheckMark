@@ -6,10 +6,20 @@ let documentLines = [];
 let checklistItems = [];
 let listTitle = 'Checklist';
 
+// Folder-mode state
+let appMode = 'checklist';     // 'file-picker' | 'checklist'
+let foundFiles = [];            // relative paths discovered by PROPFIND
+let selectedFiles = new Set(); // indices into foundFiles that are checked
+let fileData = [];              // [{ url, lines }] for multi-file checklist mode
+
 function resetState() {
   documentLines = [];
   checklistItems = [];
   listTitle = 'Checklist';
+  appMode = 'checklist';
+  foundFiles = [];
+  selectedFiles = new Set();
+  fileData = [];
 }
 
 // Default Nextcloud details (will be overridden by user configuration if available)
@@ -124,26 +134,45 @@ function listFolder() {
   request.onload = function () {
     console.log("PROPFIND status: " + this.status);
     if (this.status === 207) {
-      // Extract href values — namespace prefix varies by server so match any prefix
-      let hrefRegex = /<[a-zA-Z0-9]*:?href[^>]*>([^<]+)<\/[a-zA-Z0-9]*:?href>/gi;
-      let match;
+      // Split on <response> elements (namespace prefix varies) to correlate
+      // href and getlastmodified within the same entry
+      let blocks = this.responseText.split(/<[a-zA-Z0-9]*:?response[^>]*>/i).slice(1);
       let files = [];
-      while ((match = hrefRegex.exec(this.responseText)) !== null) {
-        let href = match[1].trim();
-        if (!href.endsWith('.md')) continue;
-        // Make path relative to the configured folder
+
+      blocks.forEach(function (block) {
+        let hrefMatch = block.match(/<[a-zA-Z0-9]*:?href[^>]*>([^<]+)<\/[a-zA-Z0-9]*:?href>/i);
+        let modMatch  = block.match(/<[a-zA-Z0-9]*:?getlastmodified[^>]*>([^<]+)<\/[a-zA-Z0-9]*:?getlastmodified>/i);
+        if (!hrefMatch) return;
+
+        let href = hrefMatch[1].trim();
+        if (!href.endsWith('.md')) return;
+
         let rel = href.startsWith(folderPath) ? href.slice(folderPath.length) : href;
-        files.push(rel);
-      }
-
-      console.log("Found " + files.length + " markdown file(s):");
-      files.forEach(function (f) { console.log(" - " + f); });
-
-      listTitle = 'Select files';
-      checklistItems = files.map(function (rel) {
-        return { name: rel, line: 0, checked: false };
+        let lastModified = modMatch ? new Date(modMatch[1].trim()).getTime() : 0;
+        files.push({ rel: rel, lastModified: lastModified });
       });
-      sendItemsToWatch();
+
+      // Most recently modified first
+      files.sort(function (a, b) { return b.lastModified - a.lastModified; });
+      let relPaths = files.map(function (f) { return f.rel; });
+
+      console.log("Found " + relPaths.length + " markdown file(s):");
+      relPaths.forEach(function (f) { console.log(" - " + f); });
+
+      foundFiles = relPaths;
+      selectedFiles = new Set();
+      appMode = 'file-picker';
+
+      checklistItems = [{ name: 'Load', line: 0, checked: false }]
+        .concat(relPaths.map(function (rel) {
+          return { name: rel, line: 0, checked: false };
+        }));
+      // Unnamed section for the Load action, named section for the file list
+      let pickerSections = [
+        { title: '', item_count: 1 },
+        { title: 'Select files', item_count: relPaths.length },
+      ];
+      sendMultiSectionToWatch(pickerSections, checklistItems);
     } else {
       console.log("PROPFIND failed with status: " + this.status + " " + this.responseText);
     }
@@ -156,7 +185,7 @@ function listFolder() {
   request.open('PROPFIND', webdavUrl, true, username, appPassword);
   request.setRequestHeader('Depth', 'infinity');
   request.setRequestHeader('Content-Type', 'application/xml; charset=utf-8');
-  request.send('<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><resourcetype/><getcontenttype/></prop></propfind>');
+  request.send('<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><resourcetype/><getcontenttype/><getlastmodified/></prop></propfind>');
   console.log("Sent PROPFIND to: " + webdavUrl);
 }
 
@@ -255,42 +284,128 @@ function setItemCheckedState(index, checked) {
     return;
   }
 
-  let lineNr = checklistItems[index].line;
-  let line = documentLines[checklistItems[index].line];
-  documentLines[lineNr] = checked ? line.replace("- [ ]", "- [x]") : line.replace("- [x]", "- [ ]");
+  let item = checklistItems[index];
+  item.checked = checked;
 
-  checklistItems[index].checked = checked;
-
-  console.log(`New document: \n${documentLines.join('\n')}`);
-  uploadUpdatedDocument();
+  if (typeof item.fileIndex !== 'undefined') {
+    // Multi-file mode: update the owning file's lines and upload only that file
+    let file = fileData[item.fileIndex];
+    let line = file.lines[item.line];
+    file.lines[item.line] = checked
+      ? line.replace('- [ ]', '- [x]')
+      : line.replace('- [x]', '- [ ]');
+    uploadFile(file.url, file.lines.join('\n'));
+  } else {
+    // Single-file mode
+    let line = documentLines[item.line];
+    documentLines[item.line] = checked
+      ? line.replace('- [ ]', '- [x]')
+      : line.replace('- [x]', '- [ ]');
+    uploadFile(webdavUrl, documentLines.join('\n'));
+  }
 }
 
-function uploadUpdatedDocument() {
-  let updatedDocument = documentLines.join('\n');
-
-  // Create a new web request
+function uploadFile(url, content) {
   let request = new XMLHttpRequest();
-
   request.onload = function () {
     if (this.status >= 200 && this.status < 300) {
-      console.log("Successfully updated the file on the server.");
+      console.log('Successfully updated: ' + url);
       setStatus('');
     } else {
-      // FAILED
-      console.log('Error updating file: ' + this.status + ' ' + this.responseText);
+      console.log('Error updating file: ' + this.status);
       setStatus('Upload err: ' + this.status);
     }
   };
-
   request.onerror = function () {
-    console.log('Request failed!');
     setStatus('Upload error!');
   };
-  request.open('PUT', webdavUrl, true, username, appPassword);
+  request.open('PUT', url, true, username, appPassword);
   request.setRequestHeader('Content-Type', 'text/markdown');
-  request.send(updatedDocument);
-  console.log('Sent updated document to server.');
+  request.send(content);
   setStatus('', true);
+}
+
+function loadSelectedFiles() {
+  let fileIndices = [...selectedFiles];
+  if (fileIndices.length === 0) {
+    setStatus('No files!');
+    return;
+  }
+
+  setStatus('', true);
+  fileData = [];
+  checklistItems = [];
+  let sections = [];
+
+  function fetchNext(pos) {
+    if (pos >= fileIndices.length) {
+      appMode = 'checklist';
+      if (checklistItems.length === 0) {
+        setStatus('All done!');
+      }
+      sendMultiSectionToWatch(sections, checklistItems);
+      return;
+    }
+
+    let relPath = foundFiles[fileIndices[pos]];
+    let url = webdavUrl + relPath;
+    let request = new XMLHttpRequest();
+
+    request.onload = function () {
+      if (this.status >= 200 && this.status < 300) {
+        let lines = splitDocumentIntoLines(this.responseText || '');
+        let items = ExtractItemsFromLines(lines).map(function (item) {
+          return { name: item.name, line: item.line, checked: false, fileIndex: pos };
+        });
+        fileData.push({ url: url, lines: lines });
+        sections.push({ title: relPath, item_count: items.length });
+        for (let i = 0; i < items.length; i++) checklistItems.push(items[i]);
+        fetchNext(pos + 1);
+      } else {
+        console.log('Error fetching ' + url + ': ' + this.status);
+        setStatus('Load error: ' + this.status);
+      }
+    };
+    request.onerror = function () { setStatus('Network error!'); };
+    request.open('GET', url, true, username, appPassword);
+    request.send();
+  }
+
+  fetchNext(0);
+}
+
+function sendMultiSectionToWatch(sections, items) {
+  let setupPayload = {};
+  setupPayload[keys.ITEMS_COUNT] = items.length;
+  setupPayload[keys.SECTION_COUNT] = sections.length;
+
+  Pebble.sendAppMessage(setupPayload,
+    function () { sendNextSection(sections, items, 0); },
+    function (err) {
+      console.log('Setup send failed: ' + JSON.stringify(err));
+      setTimeout(function () { sendMultiSectionToWatch(sections, items); }, 500);
+    }
+  );
+}
+
+function sendNextSection(sections, items, index) {
+  if (index >= sections.length) {
+    if (items.length > 0) sendNextItem(items, 0);
+    return;
+  }
+
+  let payload = {};
+  payload[keys.SECTION_INDEX] = index;
+  payload[keys.SECTION_TITLE] = sections[index].title;
+  payload[keys.SECTION_ITEM_COUNT] = sections[index].item_count;
+
+  Pebble.sendAppMessage(payload,
+    function () { sendNextSection(sections, items, index + 1); },
+    function (err) {
+      console.log('Section send failed: ' + JSON.stringify(err));
+      setTimeout(function () { sendNextSection(sections, items, index); }, 500);
+    }
+  );
 }
 
 // Listen for messages from the watch (item actions) and log them.
@@ -299,26 +414,45 @@ Pebble.addEventListener('appmessage', function (e) {
     var payload = e.payload || {};
     let retrieve = (key) => {
       let maybe = payload[key];
-      if (typeof maybe !== 'undefined') {
-        return maybe;
-      }
+      if (typeof maybe !== 'undefined') return maybe;
       maybe = payload[keys[key]];
-      if (typeof maybe !== 'undefined') {
-        return maybe;
-      }
+      if (typeof maybe !== 'undefined') return maybe;
       return null;
     };
 
     let checked = retrieve("ITEM_CHECKED");
     let unchecked = retrieve("ITEM_UNCHECKED");
-    if (checked != null) {
-      console.log('Received item CHECKED from watch: index=', checked);
-      setItemCheckedState(checked, true);
-    } else if (unchecked != null) {
-      console.log('Received item UNCHECKED from watch: index=', unchecked);
-      setItemCheckedState(unchecked, false);
+
+    if (appMode === 'file-picker') {
+      let idx = checked != null ? checked : unchecked;
+      let isChecked = checked != null;
+      if (idx === null) return;
+
+      if (idx === 0) {
+        // "→ Load" pressed
+        console.log('Load pressed with ' + selectedFiles.size + ' file(s) selected');
+        loadSelectedFiles();
+      } else {
+        // Toggle file selection (idx 1..N maps to foundFiles[idx-1])
+        let fileIdx = idx - 1;
+        if (isChecked) {
+          selectedFiles.add(fileIdx);
+          console.log('Selected file: ' + foundFiles[fileIdx]);
+        } else {
+          selectedFiles.delete(fileIdx);
+          console.log('Deselected file: ' + foundFiles[fileIdx]);
+        }
+      }
     } else {
-      console.log('Received unknown appmessage payload:', payload);
+      if (checked != null) {
+        console.log('Received item CHECKED from watch: index=', checked);
+        setItemCheckedState(checked, true);
+      } else if (unchecked != null) {
+        console.log('Received item UNCHECKED from watch: index=', unchecked);
+        setItemCheckedState(unchecked, false);
+      } else {
+        console.log('Received unknown appmessage payload:', payload);
+      }
     }
   } catch (ex) {
     console.log('Error handling appmessage: ' + ex);
