@@ -106,9 +106,57 @@ function loadDocument() {
   setStatus('', true);
 }
 
+function listFolder() {
+  loadSettings();
+
+  if (!webdavUrl || !username || !appPassword) {
+    console.log("No configuration - aborting!");
+    return;
+  }
+
+  // Extract just the path portion of the URL so we can strip it from hrefs later.
+  // e.g. "https://host/remote.php/dav/files/user/folder/" -> "/remote.php/dav/files/user/folder/"
+  let folderPath = webdavUrl.replace(/^https?:\/\/[^\/]+/, '');
+  if (!folderPath.endsWith('/')) folderPath += '/';
+
+  let request = new XMLHttpRequest();
+
+  request.onload = function () {
+    console.log("PROPFIND status: " + this.status);
+    if (this.status === 207) {
+      // Extract href values — namespace prefix varies by server so match any prefix
+      let hrefRegex = /<[a-zA-Z0-9]*:?href[^>]*>([^<]+)<\/[a-zA-Z0-9]*:?href>/gi;
+      let match;
+      let files = [];
+      while ((match = hrefRegex.exec(this.responseText)) !== null) {
+        let href = match[1].trim();
+        if (!href.endsWith('.md')) continue;
+        // Make path relative to the configured folder
+        let rel = href.startsWith(folderPath) ? href.slice(folderPath.length) : href;
+        files.push(rel);
+      }
+
+      console.log("Found " + files.length + " markdown file(s):");
+      files.forEach(function (f) { console.log(" - " + f); });
+    } else {
+      console.log("PROPFIND failed with status: " + this.status + " " + this.responseText);
+    }
+  };
+
+  request.onerror = function () {
+    console.log("PROPFIND request failed (network error)");
+  };
+
+  request.open('PROPFIND', webdavUrl, true, username, appPassword);
+  request.setRequestHeader('Depth', 'infinity');
+  request.setRequestHeader('Content-Type', 'application/xml; charset=utf-8');
+  request.send('<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><resourcetype/><getcontenttype/></prop></propfind>');
+  console.log("Sent PROPFIND to: " + webdavUrl);
+}
+
 Pebble.addEventListener('ready',
   function (e) {
-    loadDocument();
+    listFolder();
   }
 );
 
