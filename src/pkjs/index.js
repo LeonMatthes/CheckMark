@@ -138,6 +138,12 @@ function listFolder() {
 
       console.log("Found " + files.length + " markdown file(s):");
       files.forEach(function (f) { console.log(" - " + f); });
+
+      listTitle = 'Select files';
+      checklistItems = files.map(function (rel) {
+        return { name: rel, line: 0, checked: false };
+      });
+      sendItemsToWatch();
     } else {
       console.log("PROPFIND failed with status: " + this.status + " " + this.responseText);
     }
@@ -156,7 +162,12 @@ function listFolder() {
 
 Pebble.addEventListener('ready',
   function (e) {
-    listFolder();
+    loadSettings();
+    if (webdavUrl.endsWith('/')) {
+      listFolder();
+    } else {
+      loadDocument();
+    }
   }
 );
 
