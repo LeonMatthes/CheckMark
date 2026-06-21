@@ -12,9 +12,10 @@ CheckMark is a Pebble smartwatch app that fetches a Markdown file from a Nextclo
 pebble build                               # compile C + bundle JS → build/CheckMark.pbw
 ./pebble.sh install --emulator emery -vvv  # install to emulator with verbose logs (preferred platform)
 ./pebble.sh logs                           # stream APP_LOG (C) and console.log (JS)
+./pebble.sh screenshot --emulator emery --no-open /tmp/screen.png  # capture emulator screen
 ```
 
-`pebble.sh` is a wrapper that sets up `LD_LIBRARY_PATH` with local symlinks for `libsndio.so.7` and `libbz2.so.1.0` (missing on Fedora) before forwarding all arguments to `pebble`.
+`pebble.sh` is a wrapper that sets up `LD_LIBRARY_PATH` with local symlinks for `libsndio.so.7` and `libbz2.so.1.0` (missing on Fedora) before forwarding all arguments to `pebble`. Use `--no-open` when taking screenshots non-interactively to suppress the image viewer. Save screenshots to `/tmp` or a session scratchpad to avoid polluting the repo.
 
 There are no unit tests. Validation is done by running the emulator.
 
