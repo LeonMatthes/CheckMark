@@ -86,20 +86,21 @@ static void prv_draw_row(GContext *ctx, const Layer *cell_layer,
   if (idx->row >= (uint16_t)s_num_items) return;
   TodoItem *item = &s_items[idx->row];
   GRect bounds = layer_get_bounds(cell_layer);
+  GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
 
-  int x = 4;
+  int horizontal_spacing = 4;
+  int x = horizontal_spacing;
   if (item->checked && s_checked_icon) {
     GRect icon_bounds = gbitmap_get_bounds(s_checked_icon);
     int icon_y = (bounds.size.h - icon_bounds.size.h) / 2;
+    graphics_context_set_compositing_mode(ctx, GCompOpSet);
     graphics_draw_bitmap_in_rect(ctx, s_checked_icon,
       GRect(x, icon_y, icon_bounds.size.w, icon_bounds.size.h));
-    x += icon_bounds.size.w + 4;
+    x += icon_bounds.size.w + horizontal_spacing;
   }
 
-  GRect text_rect = GRect(x, 0, bounds.size.w - x - 2, bounds.size.h);
-  graphics_draw_text(ctx, item->label,
-    fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-    text_rect,
+  graphics_draw_text(ctx, item->label, font,
+    GRect(x, -2, bounds.size.w - x - horizontal_spacing, bounds.size.h),
     GTextOverflowModeTrailingEllipsis,
     GTextAlignmentLeft,
     NULL);
