@@ -15,8 +15,15 @@ typedef struct {
   char *label;
 } TodoItem;
 
-static TodoItem *s_items = NULL;
-static int s_num_items = 0;
+typedef struct {
+  char title[64];
+  int  item_count;
+} MenuSection;
+
+static TodoItem   *s_items       = NULL;
+static int         s_num_items   = 0;
+static MenuSection *s_sections   = NULL;
+static int         s_num_sections = 0;
 static GRect s_menu_bounds;
 static GBitmap *s_checked_icon;
 
@@ -64,8 +71,20 @@ static void prv_item_selected(int index, void *ctx) {
 
 // --- MenuLayer callbacks ---
 
+static uint16_t prv_get_num_sections(MenuLayer *layer, void *ctx) {
+  return s_num_sections > 0 ? (uint16_t)s_num_sections : 1;
+}
+
 static uint16_t prv_get_num_rows(MenuLayer *layer, uint16_t section_index, void *ctx) {
-  return (uint16_t)s_num_items;
+  if (s_num_sections == 0) return (uint16_t)s_num_items;
+  if (section_index >= (uint16_t)s_num_sections) return 0;
+  return (uint16_t)s_sections[section_index].item_count;
+}
+
+static int prv_global_index(uint16_t section, uint16_t row) {
+  int base = 0;
+  for (int i = 0; i < (int)section; i++) base += s_sections[i].item_count;
+  return base + (int)row;
 }
 
 static int16_t prv_cell_height(MenuLayer *layer, MenuIndex *idx, void *ctx) {
@@ -78,13 +97,19 @@ static int16_t prv_header_height(MenuLayer *layer, uint16_t section_index, void 
 
 static void prv_draw_header(GContext *ctx, const Layer *cell_layer,
                             uint16_t section_index, void *cb_ctx) {
-  menu_cell_basic_header_draw(ctx, cell_layer, s_menu_title);
+  const char *title = (s_num_sections > 0 && section_index < (uint16_t)s_num_sections)
+    ? s_sections[section_index].title
+    : s_menu_title;
+  menu_cell_basic_header_draw(ctx, cell_layer, title);
 }
 
 static void prv_draw_row(GContext *ctx, const Layer *cell_layer,
                          MenuIndex *idx, void *cb_ctx) {
-  if (idx->row >= (uint16_t)s_num_items) return;
-  TodoItem *item = &s_items[idx->row];
+  int global = (s_num_sections > 0)
+    ? prv_global_index(idx->section, idx->row)
+    : (int)idx->row;
+  if (global < 0 || global >= s_num_items) return;
+  TodoItem *item = &s_items[global];
   GRect bounds = layer_get_bounds(cell_layer);
   GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
 
@@ -107,7 +132,10 @@ static void prv_draw_row(GContext *ctx, const Layer *cell_layer,
 }
 
 static void prv_select_click(MenuLayer *layer, MenuIndex *idx, void *ctx) {
-  prv_item_selected((int)idx->row, ctx);
+  int global = (s_num_sections > 0)
+    ? prv_global_index(idx->section, idx->row)
+    : (int)idx->row;
+  prv_item_selected(global, ctx);
 }
 
 // ---------------------------
@@ -120,6 +148,13 @@ static void dealloc_items() {
     free(s_items);
     s_items = NULL;
   }
+  s_num_items = 0;
+
+  if (s_sections) {
+    free(s_sections);
+    s_sections = NULL;
+  }
+  s_num_sections = 0;
 }
 
 static void update_count(int count) {
@@ -165,12 +200,13 @@ static void complete_list_update() {
 
   s_menu_layer = menu_layer_create(s_menu_bounds);
   menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks){
-    .get_num_rows    = prv_get_num_rows,
-    .get_cell_height = prv_cell_height,
+    .get_num_sections  = prv_get_num_sections,
+    .get_num_rows      = prv_get_num_rows,
+    .get_cell_height   = prv_cell_height,
     .get_header_height = prv_header_height,
-    .draw_header     = prv_draw_header,
-    .draw_row        = prv_draw_row,
-    .select_click    = prv_select_click,
+    .draw_header       = prv_draw_header,
+    .draw_row          = prv_draw_row,
+    .select_click      = prv_select_click,
   });
   menu_layer_set_click_config_onto_window(s_menu_layer, s_window);
 #ifdef PBL_COLOR
@@ -205,6 +241,31 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *t_count = dict_find(iter, MESSAGE_KEY_ITEMS_COUNT);
   if (t_count) {
     update_count(t_count->value->int32);
+  }
+
+  Tuple *t_sc = dict_find(iter, MESSAGE_KEY_SECTION_COUNT);
+  if (t_sc) {
+    free(s_sections);
+    s_num_sections = (int)t_sc->value->int32;
+    s_sections = s_num_sections > 0
+      ? calloc(s_num_sections, sizeof(MenuSection))
+      : NULL;
+    APP_LOG(APP_LOG_LEVEL_INFO, "Received section_count=%d", s_num_sections);
+  }
+
+  Tuple *t_si = dict_find(iter, MESSAGE_KEY_SECTION_INDEX);
+  Tuple *t_st = dict_find(iter, MESSAGE_KEY_SECTION_TITLE);
+  Tuple *t_sn = dict_find(iter, MESSAGE_KEY_SECTION_ITEM_COUNT);
+  if (t_si && t_st && t_sn && s_sections) {
+    int idx = (int)t_si->value->int32;
+    if (idx >= 0 && idx < s_num_sections) {
+      strncpy(s_sections[idx].title, t_st->value->cstring,
+              sizeof(s_sections[idx].title) - 1);
+      s_sections[idx].title[sizeof(s_sections[idx].title) - 1] = '\0';
+      s_sections[idx].item_count = (int)t_sn->value->int32;
+      APP_LOG(APP_LOG_LEVEL_INFO, "Section %d: '%s' (%d items)",
+              idx, s_sections[idx].title, s_sections[idx].item_count);
+    }
   }
 
   Tuple *t_index = dict_find(iter, MESSAGE_KEY_ITEMS_INDEX);

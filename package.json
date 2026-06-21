@@ -36,7 +36,11 @@
       "CONFIG_APP_PASSWORD",
       "CONFIG_WEB_DAV_URL",
       "SET_STATUS",
-      "SET_PROGRESSING"
+      "SET_PROGRESSING",
+      "SECTION_COUNT",
+      "SECTION_INDEX",
+      "SECTION_TITLE",
+      "SECTION_ITEM_COUNT"
     ],
     "capabilities": [
       "configurable"
