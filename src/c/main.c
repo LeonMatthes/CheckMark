@@ -104,7 +104,16 @@ static void prv_draw_header(GContext *ctx, const Layer *cell_layer,
   const char *title = (s_num_sections > 0 && section_index < (uint16_t)s_num_sections)
     ? s_sections[section_index].title
     : s_menu_title;
-  menu_cell_basic_header_draw(ctx, cell_layer, title);
+  if (title[0] == '\0') return;
+
+  GRect bounds = layer_get_bounds(cell_layer);
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
+  graphics_context_set_text_color(ctx, GColorWhite);
+  graphics_draw_text(ctx, title,
+    fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD),
+    GRect(4, 0, bounds.size.w - 8, bounds.size.h),
+    GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
 
 static void prv_draw_row(GContext *ctx, const Layer *cell_layer,

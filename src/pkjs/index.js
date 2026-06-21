@@ -358,7 +358,7 @@ function loadSelectedFiles() {
           return { name: item.name, line: item.line, checked: false, fileIndex: pos };
         });
         fileData.push({ url: url, lines: lines });
-        sections.push({ title: relPath, item_count: items.length });
+        sections.push({ title: relPath.replace(/\.md$/i, ''), item_count: items.length });
         for (let i = 0; i < items.length; i++) checklistItems.push(items[i]);
         fetchNext(pos + 1);
       } else {
