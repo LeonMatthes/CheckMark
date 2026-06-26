@@ -25,7 +25,7 @@ static void start_progress_anim();
 
 static void draw_progress_layer(Layer *layer, GContext *ctx) {
   // Example progress drawing (replace with actual progress logic)
-  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorOrange, GColorBlack));
+  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorOrange, GColorWhite));
   graphics_fill_rect(ctx, layer_get_bounds(layer), 0, GCornerNone);
 }
 
@@ -52,8 +52,8 @@ static void start_progress_anim() {
   }
 
   GRect bar_bounds = layer_get_bounds(status_bar_layer_get_layer(s_status_bar_layer));
-  GRect from = GRect(-bar_bounds.size.w / 3, bar_bounds.size.h - 2, bar_bounds.size.w / 3, 2);
-  GRect to = GRect(bar_bounds.size.w, bar_bounds.size.h - 2, bar_bounds.size.w / 4, 2);
+  GRect from = GRect(-bar_bounds.size.w / 3, bar_bounds.size.h - 4, bar_bounds.size.w / 3, 4);
+  GRect to = GRect(bar_bounds.size.w, bar_bounds.size.h - 4, bar_bounds.size.w / 4, 4);
 
   s_progress_anim = property_animation_create_layer_frame(s_progress_layer, &from, &to);
   animation_set_duration((Animation *)s_progress_anim, 1000);
@@ -77,7 +77,7 @@ void status_bar_init(Window *window) {
   // Create the status bar at the top of the window
   s_status_bar_layer = status_bar_layer_create();
   status_bar_layer_set_separator_mode(s_status_bar_layer, StatusBarLayerSeparatorModeDotted);
-  status_bar_layer_set_colors(s_status_bar_layer, GColorClear, GColorBlack);
+  status_bar_layer_set_colors(s_status_bar_layer, GColorClear, GColorWhite);
 
   layer_add_child(window_layer, status_bar_layer_get_layer(s_status_bar_layer));
 
@@ -87,9 +87,9 @@ void status_bar_init(Window *window) {
   s_status_layer = text_layer_create(
       GRect(0, -bounds.size.h, bounds.size.w, bounds.size.h - 1)); // Leave space for the separator line
   text_layer_set_font(s_status_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_14));
-  text_layer_set_background_color(s_status_layer, PBL_IF_COLOR_ELSE(GColorRajah, GColorBlack));
-  text_layer_set_text_color(s_status_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorWhite));
+                      fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD));
+  text_layer_set_background_color(s_status_layer, PBL_IF_COLOR_ELSE(GColorRajah, GColorWhite));
+  text_layer_set_text_color(s_status_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorBlack));
   text_layer_set_text_alignment(s_status_layer, GTextAlignmentCenter);
   text_layer_set_text(s_status_layer, s_status_buffer);
 

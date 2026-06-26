@@ -32,7 +32,7 @@ const clayConfig = require('./config');
 let clay = new Clay(clayConfig, null, { autoHandleEvents: false });
 
 function loadSettings() {
-  webdavUrl = localStorage.getItem("CONFIG_WEB_DAV_URL");
+  webdavUrl = (localStorage.getItem("CONFIG_WEB_DAV_URL") || "").trim();
   username = localStorage.getItem("CONFIG_USER");
   appPassword = localStorage.getItem("CONFIG_APP_PASSWORD");
 
@@ -53,6 +53,7 @@ Pebble.addEventListener('webviewclosed', function (e) {
   // Get the keys and values from each config item
   var settings = clay.getSettings(e.response, false);
   console.log(`DICT: ${JSON.stringify(settings)}`);
+  settings.CONFIG_WEB_DAV_URL.value = settings.CONFIG_WEB_DAV_URL.value.trim();
 
   let storeSetting = (key) => {
     localStorage.setItem(key, settings[key].value);
@@ -61,18 +62,25 @@ Pebble.addEventListener('webviewclosed', function (e) {
   storeSetting("CONFIG_USER");
   storeSetting("CONFIG_APP_PASSWORD");
 
-  loadDocument();
+  main()
 });
 
+function main() {
+    loadSettings();
+    if (!webdavUrl || !username || !appPassword) {
+      console.log("No configuration - aborting!");
+      setStatus('No config!');
+      return;
+    }
+
+    if (webdavUrl.endsWith('/')) {
+      listFolder();
+    } else {
+      loadDocument();
+    }
+}
+
 function loadDocument() {
-  loadSettings();
-
-  if (!webdavUrl || !username || !appPassword) {
-    console.log("No configuration - aborting!");
-    setStatus('No config!');
-    return;
-  }
-
   // Create a new web request
   let request = new XMLHttpRequest();
 
@@ -117,13 +125,6 @@ function loadDocument() {
 }
 
 function listFolder() {
-  loadSettings();
-
-  if (!webdavUrl || !username || !appPassword) {
-    console.log("No configuration - aborting!");
-    return;
-  }
-
   // Extract just the path portion of the URL so we can strip it from hrefs later.
   // e.g. "https://host/remote.php/dav/files/user/folder/" -> "/remote.php/dav/files/user/folder/"
   let folderPath = webdavUrl.replace(/^https?:\/\/[^\/]+/, '');
@@ -159,18 +160,20 @@ function listFolder() {
       console.log("Found " + relPaths.length + " markdown file(s):");
       relPaths.forEach(function (f) { console.log(" - " + f); });
 
-      foundFiles = relPaths;
+      // Show the first few elements only.
+      // Everything else is too slow to upload to the watch and probably pointless anyway.
+      foundFiles = relPaths.slice(0, 30);
       selectedFiles = new Set();
       appMode = 'file-picker';
 
       checklistItems = [{ name: 'Load', line: 0, checked: false }]
-        .concat(relPaths.map(function (rel) {
-          return { name: rel, line: 0, checked: false };
+        .concat(foundFiles.map(function (rel) {
+          return { name: decodeURIComponent(rel), line: 0, checked: false };
         }));
       // Unnamed section for the Load action, named section for the file list
       let pickerSections = [
         { title: '', item_count: 1 },
-        { title: 'Select files', item_count: relPaths.length },
+        { title: 'Select files', item_count: foundFiles.length },
       ];
       sendMultiSectionToWatch(pickerSections, checklistItems);
     } else {
@@ -180,6 +183,7 @@ function listFolder() {
 
   request.onerror = function () {
     console.log("PROPFIND request failed (network error)");
+    setStatus('Network error!');
   };
 
   request.open('PROPFIND', webdavUrl, true, username, appPassword);
@@ -187,16 +191,12 @@ function listFolder() {
   request.setRequestHeader('Content-Type', 'application/xml; charset=utf-8');
   request.send('<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><resourcetype/><getcontenttype/><getlastmodified/></prop></propfind>');
   console.log("Sent PROPFIND to: " + webdavUrl);
+  setStatus('', true);
 }
 
 Pebble.addEventListener('ready',
   function (e) {
-    loadSettings();
-    if (webdavUrl.endsWith('/')) {
-      listFolder();
-    } else {
-      loadDocument();
-    }
+    main()
   }
 );
 
@@ -358,7 +358,7 @@ function loadSelectedFiles() {
           return { name: item.name, line: item.line, checked: false, fileIndex: pos };
         });
         fileData.push({ url: url, lines: lines });
-        sections.push({ title: relPath.replace(/\.md$/i, ''), item_count: items.length });
+        sections.push({ title: decodeURIComponent(relPath).replace(/\.md$/i, ''), item_count: items.length });
         for (let i = 0; i < items.length; i++) checklistItems.push(items[i]);
         fetchNext(pos + 1);
       } else {

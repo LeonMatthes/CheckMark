@@ -107,13 +107,13 @@ static void prv_draw_header(GContext *ctx, const Layer *cell_layer,
   if (title[0] == '\0') return;
 
   GRect bounds = layer_get_bounds(cell_layer);
-  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorBlack, GColorWhite));
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
-  graphics_context_set_text_color(ctx, GColorWhite);
+  graphics_context_set_text_color(ctx, PBL_IF_COLOR_ELSE(GColorWhite, GColorBlack));
   graphics_draw_text(ctx, title,
-    fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD),
+    fonts_get_system_font(FONT_KEY_GOTHIC_14),
     GRect(4, 0, bounds.size.w - 8, bounds.size.h),
-    GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 }
 
 static void prv_draw_row(GContext *ctx, const Layer *cell_layer,
@@ -202,6 +202,19 @@ static void add_item(int index, const char *item_text) {
   item->checked = false;
 }
 
+static int prv_content_height() {
+  int h = 0;
+  if (s_num_sections == 0) {
+    h += MENU_CELL_BASIC_HEADER_HEIGHT + s_num_items * CELL_HEIGHT;
+  } else {
+    for (int i = 0; i < s_num_sections; i++) {
+      if (s_sections[i].title[0] != '\0') h += MENU_CELL_BASIC_HEADER_HEIGHT;
+      h += s_sections[i].item_count * CELL_HEIGHT;
+    }
+  }
+  return h;
+}
+
 static void complete_list_update() {
   APP_LOG(APP_LOG_LEVEL_INFO, "Completed list update with %d items", s_num_items);
 
@@ -211,7 +224,12 @@ static void complete_list_update() {
     s_menu_layer = NULL;
   }
 
-  s_menu_layer = menu_layer_create(s_menu_bounds);
+  int raw_h = prv_content_height();
+  int content_h = raw_h < s_menu_bounds.size.h ? raw_h : s_menu_bounds.size.h;
+  GRect menu_frame = GRect(s_menu_bounds.origin.x, s_menu_bounds.origin.y,
+                           s_menu_bounds.size.w, content_h);
+
+  s_menu_layer = menu_layer_create(menu_frame);
   menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks){
     .get_num_sections  = prv_get_num_sections,
     .get_num_rows      = prv_get_num_rows,
@@ -228,14 +246,14 @@ static void complete_list_update() {
 
   // Slide the menu layer in from the left
   Layer *layer = menu_layer_get_layer(s_menu_layer);
-  GRect from_frame = GRect(s_menu_bounds.origin.x - s_menu_bounds.size.w,
-                           s_menu_bounds.origin.y,
-                           s_menu_bounds.size.w, s_menu_bounds.size.h);
+  GRect from_frame = GRect(menu_frame.origin.x - menu_frame.size.w,
+                           menu_frame.origin.y,
+                           menu_frame.size.w, menu_frame.size.h);
   layer_set_frame(layer, from_frame);
   layer_add_child(window_get_root_layer(s_window), layer);
 
   PropertyAnimation *prop_anim =
-      property_animation_create_layer_frame(layer, &from_frame, &s_menu_bounds);
+      property_animation_create_layer_frame(layer, &from_frame, &menu_frame);
   Animation *anim = (Animation *)prop_anim;
   animation_set_duration(anim, 300);
   animation_set_curve(anim, AnimationCurveEaseOut);
@@ -317,6 +335,7 @@ static void prv_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
 
+  window_set_background_color(window, GColorBlack);
   status_bar_init(window);
 
   GRect bar_bounds = layer_get_bounds(status_bar_get_layer());
